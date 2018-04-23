@@ -312,6 +312,8 @@ function CheckTruckBilling(const nTruck:string):Boolean;
 //检查车辆是否运行开单
 function CheckTruckCount(const nStockName: string):Boolean;
 //检查厂内车辆数是否达到上限
+function GetCenterSUM(nStockNo,nCenterID:string):string;
+//获取生产线余量
 
 
 function CallBusinessCommand(const nCmd: Integer; const nData,nExt: string;
@@ -3005,6 +3007,18 @@ begin
   begin
     if FieldByName('ZL').AsInteger >= StrToInt(nSTD) then Result:=False;
   end;
+end;
+
+//Date:2018-03-16
+//获取生产线余量
+function GetCenterSUM(nStockNo,nCenterID:string):string;
+var nOut: TWorkerBusinessCommand;
+begin
+  if CallBusinessCommand(cBC_GetAXInVentSum, nStockNo, nCenterID, @nOut) then
+  begin
+    Result := nOut.FData;
+  end else Result := '';
+  WriteLog(nStockNo+'  '+nCenterID+'  '+Result);
 end;
 
 end.

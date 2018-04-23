@@ -2317,8 +2317,9 @@ begin
   Result := False;
   nDBWorker := nil;
   try
-    nStr := 'select sum(PostedQty+Received-Deducted+Registered-Picked-ReservPhysical) as Yuliang from %s a '+
-            'where itemid=''%s'' and xtinventventerid=''%s'' and dataareaid=''%s'' ';
+    //nStr := 'select sum(PostedQty+Received-Deducted+Registered-Picked-ReservPhysical) as Yuliang from %s '+
+    nStr := 'select sum(PostedQty+Received-Deducted+Registered-Picked) as Yuliang from %s '+
+            'where itemid=''%s'' and xtInventCenterId=''%s'' and dataareaid=''%s'' ';
     nStr := Format(nStr, [sTable_AX_InventSum, FIn.FData, FIn.FExtParam, gCompanyAct]);
     //xxxxx
     WriteLog(nStr);

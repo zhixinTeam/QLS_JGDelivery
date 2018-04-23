@@ -600,7 +600,7 @@ var nIdx: Integer;
     nPlanW,nBatQuaS,nBatQuaE:Double;
     FSumTon:Double;
     nStr,nCenterYL,nStockNo,nCenterID:string;
-    nYL:Double;
+    nYL,nKdValue:Double;
 begin
   FSumTon:=0.00;
   if ListBill.Items.Count < 1 then
@@ -886,19 +886,19 @@ begin
       Values['KuWei'] := '';
       Values['LocationID']:= 'A';
       {$ENDIF}
-      {nCenterYL:=GetCenterSUM(nStockNo,Values['CenterID']);
+      nCenterYL:=GetCenterSUM(nStockNo,Values['CenterID']);
       if nCenterYL <> '' then
       begin
         if IsNumber(nCenterYL,True) then
         begin
           nYL:= StrToFloat(nCenterYL);
-          if nYL <= 0 then
+          if (nYL <= 0) or (nYL < nKdValue) then
           begin
             ShowMsg('生产线余量不足：'+#13#10+FormatFloat('0.00',nYL),sHint);
             Exit;
           end;
         end;
-      end; }
+      end;
     end;
 
     gInfo.FIDList := SaveBill(PackerEncodeStr(nList.Text));

@@ -15,7 +15,7 @@ uses
   ADODB, dxBkgnd, cxDrawTextUtils,
   dxPSPrVwStd, dxPScxEditorProducers, dxPScxExtEditorProducers,
   dxPScxPageControlProducer, dxSkinsCore, dxSkinscxPCPainter,
-  dxSkinsDefaultPainters;
+  dxSkinsDefaultPainters, dxPSPDFExportCore, dxPSPDFExport;
 
 type
   TFDM = class(TDataModule)

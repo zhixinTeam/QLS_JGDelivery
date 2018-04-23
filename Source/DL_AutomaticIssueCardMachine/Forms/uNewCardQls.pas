@@ -286,6 +286,8 @@ var
   nStr,nType:string;
   nPos:Integer;
   nZID,nCenterID,nSampleID:string;
+  nCenterYL, nStockNo:string;
+  nYL,nKdValue:Double;
 begin
   FNewBillID := '';
   Result := False;
@@ -399,19 +401,19 @@ begin
       Values['IfFenChe'] := 'N';
       Values['KuWei'] := '';
       Values['LocationID']:= 'A';
-      {nCenterYL:=GetCenterSUM(nStockNo,Values['CenterID']);
+      nCenterYL:=GetCenterSUM(nStockNo,Values['CenterID']);
       if nCenterYL <> '' then
       begin
         if IsNumber(nCenterYL,True) then
         begin
           nYL:= StrToFloat(nCenterYL);
-          if nYL <= 0 then
+          if (nYL <= 0) or (nYL < nKdValue) then
           begin
             ShowMsg('生产线余量不足：'+#13#10+FormatFloat('0.00',nYL),sHint);
             Exit;
           end;
         end;
-      end; }
+      end;
     end;
     nBillData := PackerEncodeStr(nList.Text);
     FNewBillID := SaveBill(nBillData);

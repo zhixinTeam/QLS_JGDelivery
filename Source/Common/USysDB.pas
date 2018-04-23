@@ -401,7 +401,7 @@ ResourceString
   sTable_AX_PurOrder  = 'purchtable';                //采购订单
   sTable_AX_PurOrdLine= 'Purchline';                 //采购订单行
   sTable_AX_CompArea  = 'XT_COMPACTAREA';            //销售区域
-  sTable_AX_InventSum = 'XTInventSUM';               //生产线余量
+  sTable_AX_InventSum = 'XT_VInventSumDim';               //生产线余量
 
 
 
