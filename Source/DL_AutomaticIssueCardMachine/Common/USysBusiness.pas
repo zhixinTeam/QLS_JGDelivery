@@ -312,7 +312,9 @@ function CheckTruckBilling(const nTruck:string):Boolean;
 //检查车辆是否运行开单
 function CheckTruckCount(const nStockName: string):Boolean;
 //检查厂内车辆数是否达到上限
-function GetCenterSUM(nStockNo,nCenterID:string):string;
+function IFSaveBill(const nLID: string): Boolean;
+//是否已经保存提货单
+function GetCenterSUM(nStockNo,nStockType,nCenterID:string):string;
 //获取生产线余量
 
 
@@ -3009,16 +3011,42 @@ begin
   end;
 end;
 
+//是否已经保存提货单
+function IFSaveBill(const nLID: string): Boolean;
+var nStr: string;
+begin
+  Result := False;
+
+  nStr :='select L_Card,L_ID from %s where L_Status = ''%s'' and L_ID =''%s'' ';
+  nStr := Format(nStr, [sTable_Bill, sFlag_TruckNone, nLID]);
+  with FDM.QueryTemp(nStr) do
+  if RecordCount > 0 then
+  begin
+    if Length(Fields[0].AsString) > 1 then
+    begin
+      Result := True;
+    end;
+  end;
+end;
+
 //Date:2018-03-16
 //获取生产线余量
-function GetCenterSUM(nStockNo,nCenterID:string):string;
+function GetCenterSUM(nStockNo,nStockType,nCenterID:string):string;
 var nOut: TWorkerBusinessCommand;
+    nList: TStrings;
 begin
-  if CallBusinessCommand(cBC_GetAXInVentSum, nStockNo, nCenterID, @nOut) then
-  begin
-    Result := nOut.FData;
-  end else Result := '';
-  WriteLog(nStockNo+'  '+nCenterID+'  '+Result);
+  nList := TStringList.Create;
+  try
+    nList.Values['StockType'] := nStockType;
+    nList.Values['CenterID']  := nCenterID;
+    if CallBusinessCommand(cBC_GetAXInVentSum, nStockNo, nList.Text, @nOut) then
+    begin
+      Result := nOut.FData;
+    end else Result := '';
+    WriteLog(nStockNo+'  '+nStockType+'  '+nCenterID+'  '+Result);
+  finally
+    nList.Free;
+  end;
 end;
 
 end.

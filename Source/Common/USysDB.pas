@@ -202,6 +202,7 @@ ResourceString
   sFlag_NFStock       = 'NoFaHuoStock';              //现场无需发货
   sFlag_NFPurch       = 'NoFaHuoPurch';              //现场无需发货（原材料）
   sFlag_PEmpTWuCha    = 'EmpTruckWuCha';             //空车出厂误差
+  sFlag_NoEleCard     = 'NoEleCard';                 //无需办理电子标签
 
   sFlag_CommonItem    = 'CommonItem';                //公共信息
   sFlag_CardItem      = 'CardItem';                  //磁卡信息项
@@ -262,6 +263,7 @@ ResourceString
   sFlag_NoSampleID    = 'NoSampleID';                //无试样编号
   sFlag_Sgzl          = 'HuYanSgzl';                 //石膏种类
   sFlag_BrickItem     = 'BrickItem';                 //外销砖块种类
+  sFlag_NoKcStock     = 'NoKcStock';                 //无库存物料
 
   sFlag_Departments   = 'Departments';               //部门列表
 //  sFlag_DepDaTing     = '大厅';                      //服务大厅
@@ -1264,7 +1266,7 @@ ResourceString
        'T_PValue $Float Default 0, T_PTime Integer Default 0,' +
        'T_PlateColor varChar(12),T_Type varChar(12), T_LastTime DateTime, ' +
        'T_Card varChar(32),T_Card2 varChar(32), T_CardUse Char(1), T_NoVerify Char(1),' +
-       'T_Valid Char(1), T_VIPTruck Char(1), T_HasGPS Char(1),'+
+       'T_Valid Char(1), T_VIPTruck Char(1), T_HasGPS Char(1), T_DDCard varChar(32),'+
        'T_CompanyID varChar(10),T_XTECB varChar(10),T_VendAccount varChar(20),'+
        'T_Driver varChar(10), T_SaleID varChar(20), T_RecID bigint not null default ((0)),'+
        'T_MatePID varChar(15), T_MateID varChar(15), T_MateName varChar(80),' +
@@ -1313,6 +1315,7 @@ ResourceString
    *.T_DestAddr:倒入地址
    *.T_SaleID:订单号
    *.T_RecID：订单行编码
+   *.T_DDCard:短倒磁卡
    ---------------------------------------------------------------------------//
   -----------------------------------------------------------------------------}
 

@@ -215,6 +215,8 @@ function GetOrderLimValue: Double;
 //获取订单量开单限值
 function IsDealerLadingIDExit(const nDealerID: string): Boolean;
 //检查经销商单号是否已存在
+function IsEleCardVaid(const nStockType,nTruckNo,nStockNo: string): Boolean;
+//检查散装车辆是否办理或启用电子标签
 function IsWeekValid(const nWeek: string; var nHint: string): Boolean;
 //周期是否有效
 function IsWeekHasEnable(const nWeek: string): Boolean;
@@ -335,7 +337,7 @@ function SaveTransferInfo(nTruck, nMateID, nMate, nSrcAddr, nDstAddr:string):Boo
 
 function GetAutoInFactory(const nStockNo:string):Boolean;
 //获取是否自动进厂
-function GetCenterSUM(nStockNo,nCenterID:string):string;
+function GetCenterSUM(nStockNo,nStockType,nCenterID:string):string;
 //获取生产线余量
 function GetZhikaYL(nRECID:string):Double;
 //获取纸卡余量
@@ -368,6 +370,9 @@ function LoadSaleLineInfo(const nRecID: string; var nHint: string): TDataset;
 function LoadAXPlanInfo(const nID: string; var nHint: string): TDataset;
 //载入提货信息
 function IsBrick(const nStockno:string):Boolean;
+
+function VerifyZTlineChange(const nLineID: string): Boolean;
+//校验装车线nLineID水泥品种变更时如果存在排队车辆则无法修改
 
 implementation
 
@@ -2048,6 +2053,49 @@ begin
     Result := False;
 end;
 
+function IsEleCardVaid(const nStockType,nTruckNo,nStockNo: string): Boolean;
+var
+  nStr,nSql:string;
+begin
+  Result := False;
+  if nStockType <> sFlag_San then
+  begin
+    Result := True;
+    Exit;
+  end;
+
+  nStr := 'Select D_Value,D_Memo,D_ParamB From $Table ' +
+          'Where D_Name=''$Name'' And D_Value=''$Value'' ' +
+          'And D_Memo=''$Memo'' Order By D_Index ASC';
+  nStr := MacroValue(nStr, [MI('$Table', sTable_SysDict),
+                            MI('$Name', sFlag_NoEleCard),
+                            MI('$Value', nStockNo),
+                            MI('$Memo', nStockType)]);
+  //xxxxx
+
+  with FDM.QueryTemp(nStr) do
+  begin
+    if RecordCount > 0 then
+    begin
+      Result := True;
+      Exit;
+    end;
+  end;
+
+  nSql := 'select * from %s where T_Truck = ''%s'' ';
+  nSql := Format(nSql,[sTable_Truck,nTruckNo]);
+
+  with FDM.QueryTemp(nSql) do
+  begin
+    if recordcount>0 then
+    begin
+      if (FieldByName('T_Card').AsString = '') and (FieldByName('T_Card2').AsString = '') then
+        Exit;
+      Result := FieldByName('T_CardUse').AsString = sFlag_Yes;
+    end;
+  end;
+end;
+
 //Desc: 检测nWeek是否存在或过期
 function IsWeekValid(const nWeek: string; var nHint: string): Boolean;
 var nStr: string;
@@ -3645,14 +3693,22 @@ end;
 
 //Date:2016-10-09
 //获取生产线余量
-function GetCenterSUM(nStockNo,nCenterID:string):string;
+function GetCenterSUM(nStockNo,nStockType,nCenterID:string):string;
 var nOut: TWorkerBusinessCommand;
+    nList: TStrings;
 begin
-  if CallBusinessCommand(cBC_GetAXInVentSum, nStockNo, nCenterID, @nOut) then
-  begin
-    Result := nOut.FData;
-  end else Result := '';
-  WriteLog(nStockNo+'  '+nCenterID+'  '+Result);
+  nList := TStringList.Create;
+  try
+    nList.Values['StockType'] := nStockType;
+    nList.Values['CenterID']  := nCenterID;
+    if CallBusinessCommand(cBC_GetAXInVentSum, nStockNo, nList.Text, @nOut) then
+    begin
+      Result := nOut.FData;
+    end else Result := '';
+    WriteLog(nStockNo+'  '+nStockType+'  '+nCenterID+'  '+Result);
+  finally
+    nList.Free;
+  end;
 end;
 
 //获取纸卡余量
@@ -3745,6 +3801,26 @@ begin
   Result := '';
   if CallBusinessCommand(cBC_WeChat_get_shoporders, nXmlStr, '', @nOut) then
     Result := nOut.FData;
+end;
+
+//Desc: 校验装车线nLineID水泥品种变更时如果存在排队车辆则无法修改
+function VerifyZTlineChange(const nLineID: string): Boolean;
+var
+  nStr,nSql:string;
+begin
+  Result := True;
+
+  nSql := 'select * from %s where T_Line = ''%s'' ';
+  nSql := Format(nSql,[sTable_ZTTrucks,nLineID]);
+
+  with FDM.QueryTemp(nSql) do
+  begin
+    if recordcount>0 then
+    begin
+      Result := False;
+      Exit;
+    end;
+  end;
 end;
 
 

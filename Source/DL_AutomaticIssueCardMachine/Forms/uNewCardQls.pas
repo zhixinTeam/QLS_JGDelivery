@@ -93,7 +93,7 @@ type
     function GetOutASH(const nStr: string): string;
     //获取批次号条件
     function GetStockType(const nStockno:string):string;
-    function IsEleCardVaid(const nStockType, nTruckNo:string):Boolean;
+    function IsEleCardVaid(const nStockType, nTruckNo,nStockNo:string):Boolean;
     //电子标签是否启用
   public
     { Public declarations }
@@ -179,6 +179,7 @@ begin
     end;
     editWebOrderNo.SelectAll;
     if not DownloadOrder(nCardNo) then Exit;
+    FWebOrderID := Trim(editWebOrderNo.Text);
     btnOK.Enabled := True;
   finally
     btnQuery.Enabled := True;
@@ -288,6 +289,7 @@ var
   nZID,nCenterID,nSampleID:string;
   nCenterYL, nStockNo:string;
   nYL,nKdValue:Double;
+  nRet: Boolean;
 begin
   FNewBillID := '';
   Result := False;
@@ -298,6 +300,14 @@ begin
     LabInfo.Caption := '未查询网上订单';
     Exit;
   end;
+
+  if Trim(editWebOrderNo.Text) <> FWebOrderID then
+  begin
+    ShowMsg('提货单号已经更改,无法保存',sHint);
+    LabInfo.Caption := '提货单号已经更改,无法保存,请重新扫描';
+    Exit;
+  end;
+
   if not VerifyCtrl(EditTruck,nHint) then
   begin
     ShowMsg(nHint,sHint);
@@ -322,17 +332,23 @@ begin
     Exit;
   end;
   {$ENDIF}
-  
+
   {$IFDEF CXSY}
   if cbxCenterID.Text= '' then
   begin
     ShowMsg('生产线为空！请联系管理员', sHint); Exit;
   end;
-  if not IsEleCardVaid(gType,EditTruck.Text) then
+  if not IsEleCardVaid(gType,EditTruck.Text,gStockNo) then
   begin
     ShowMsg('车辆未办理电子标签或电子标签未启用！请联系管理员', sHint); Exit;
   end;
   {$ENDIF}
+
+  if not IsEleCardVaid(gType,EditTruck.Text,gStockNo) then
+  begin
+    ShowMsg('车辆未办理电子标签或电子标签未启用！请联系管理员', sHint); Exit;
+  end;
+
   if gSysParam.FUserID = '' then gSysParam.FUserID := 'AICM';
   nCenterID := cbxCenterID.Text;
   nSampleID := '';
@@ -350,82 +366,90 @@ begin
     PrintFH.Checked := True
   else
     PrintFH.Checked := False;
+
+  //验证是否已经保存提货单
+  FNewBillID := FWebOrderID;
+  nRet := IFSaveBill(FNewBillID);
+
   //保存提货单
-  nStocks := TStringList.Create;
-  nList := TStringList.Create;
-  nTmp := TStringList.Create;
-  try
-    nList.Clear;
-    nPrint := False;
-    LoadSysDictItem(sFlag_PrintBill, nStocks);
-    with nTmp do
-    begin
-      Values['Type'] := gType;
-      Values['StockNO'] := gStockNO;
-      Values['StockName'] := EditSName.text;
-      Values['Price'] := gPrice;
-      Values['Value'] := EditValue.text;
-      Values['RECID'] := gRecID;
-      Values['SampleID'] := '';
-      {$IFDEF ZXKP}
-      if not CheckTruckCount(Trim(EditSName.text)) then
+  if not nRet then
+  begin
+    nStocks := TStringList.Create;
+    nList := TStringList.Create;
+    nTmp := TStringList.Create;
+    try
+      nList.Clear;
+      nPrint := False;
+      LoadSysDictItem(sFlag_PrintBill, nStocks);
+      with nTmp do
       begin
-        ShowMsg('厂内车辆达到上限，禁止开单',sHint);
-        Exit;
-      end;
-      {$ENDIF}
-    end;
-
-    nList.Add(PackerEncodeStr(nTmp.Text));
-    nPrint := nStocks.IndexOf(gStockNO) >= 0;
-
-    with nList do
-    begin
-      Values['Bills'] := PackerEncodeStr(nList.Text);
-      Values['LID'] := Trim(editWebOrderNo.Text);
-      Values['ZhiKa'] := gZhiKa;
-      Values['Truck'] := EditTruck.Text;
-      Values['Lading'] := IntToStr(EditLading.ItemIndex);
-      //Values['VPListID']:=
-      Values['IsVIP'] := EditType.Text;
-      //Values['Seal'] := EditFQ.Text;
-      Values['BuDan'] := 'N';
-      if PrintFH.Checked then
-        Values['IfHYprt'] := 'Y'
-      else
-        Values['IfHYprt'] := 'N';
-      Values['SalesType'] := gSalesType;
-      Values['CenterID']:= nCenterID;
-      Values['JXSTHD'] := '';
-      Values['Project'] := Trim(EditCName.Text);
-      Values['IfFenChe'] := 'N';
-      Values['KuWei'] := '';
-      Values['LocationID']:= 'A';
-      nCenterYL:=GetCenterSUM(nStockNo,Values['CenterID']);
-      if nCenterYL <> '' then
-      begin
-        if IsNumber(nCenterYL,True) then
+        Values['Type'] := gType;
+        Values['StockNO'] := gStockNO;
+        Values['StockName'] := EditSName.text;
+        Values['Price'] := gPrice;
+        Values['Value'] := EditValue.text;
+        Values['RECID'] := gRecID;
+        Values['SampleID'] := '';
+        {$IFDEF ZXKP}
+        if not CheckTruckCount(Trim(EditSName.text)) then
         begin
-          nYL:= StrToFloat(nCenterYL);
-          if (nYL <= 0) or (nYL < nKdValue) then
+          ShowMsg('厂内车辆达到上限，禁止开单',sHint);
+          Exit;
+        end;
+        {$ENDIF}
+      end;
+
+      nList.Add(PackerEncodeStr(nTmp.Text));
+      nPrint := nStocks.IndexOf(gStockNO) >= 0;
+
+      with nList do
+      begin
+        Values['Bills'] := PackerEncodeStr(nList.Text);
+        Values['LID'] := FWebOrderID;
+        Values['ZhiKa'] := gZhiKa;
+        Values['Truck'] := EditTruck.Text;
+        Values['Lading'] := IntToStr(EditLading.ItemIndex);
+        //Values['VPListID']:=
+        Values['IsVIP'] := EditType.Text;
+        //Values['Seal'] := EditFQ.Text;
+        Values['BuDan'] := 'N';
+        if PrintFH.Checked then
+          Values['IfHYprt'] := 'Y'
+        else
+          Values['IfHYprt'] := 'N';
+        Values['SalesType'] := gSalesType;
+        Values['CenterID']:= nCenterID;
+        Values['JXSTHD'] := '';
+        Values['Project'] := Trim(EditCName.Text);
+        Values['IfFenChe'] := 'N';
+        Values['KuWei'] := '';
+        Values['LocationID']:= 'A';
+        nCenterYL:=GetCenterSUM(gStockNo,gType,Values['CenterID']);
+        if nCenterYL <> '' then
+        begin
+          if IsNumber(nCenterYL,True) then
           begin
-            ShowMsg('生产线余量不足：'+#13#10+FormatFloat('0.00',nYL),sHint);
-            Exit;
+            nYL:= StrToFloat(nCenterYL);
+            if (nYL <= 0) or (nYL < nKdValue) then
+            begin
+              ShowMsg('生产线余量不足：'+#13#10+FormatFloat('0.00',nYL),sHint);
+              Exit;
+            end;
           end;
         end;
       end;
+      nBillData := PackerEncodeStr(nList.Text);
+      FNewBillID := SaveBill(nBillData);
+      if FNewBillID = '' then
+      begin
+        ShowMsg('提货单保存失败！请联系管理员', sHint);
+        Exit;
+      end;
+    finally
+      nStocks.Free;
+      nList.Free;
+      nTmp.Free;
     end;
-    nBillData := PackerEncodeStr(nList.Text);
-    FNewBillID := SaveBill(nBillData);
-    if FNewBillID = '' then
-    begin
-      ShowMsg('提货单保存失败！请联系管理员', sHint);
-      Exit;
-    end;
-  finally
-    nStocks.Free;
-    nList.Free;
-    nTmp.Free;
   end;
   ShowMsg('提货单保存成功', sHint);
   //发卡
@@ -642,15 +666,33 @@ begin
 end;
 
 function TfFormNewCardQls.IsEleCardVaid(const nStockType,
-  nTruckNo: string): Boolean;
+  nTruckNo,nStockNo: string): Boolean;
 var
-  nSql:string;
+  nStr,nSql:string;
 begin
   Result := False;
-  if nStockType <> 'S' then
+  if nStockType <> sFlag_San then
   begin
     Result := True;
     Exit;
+  end;
+
+  nStr := 'Select D_Value,D_Memo,D_ParamB From $Table ' +
+          'Where D_Name=''$Name'' And D_Value=''$Value'' ' +
+          'And D_Memo=''$Memo'' Order By D_Index ASC';
+  nStr := MacroValue(nStr, [MI('$Table', sTable_SysDict),
+                            MI('$Name', sFlag_NoEleCard),
+                            MI('$Value', nStockNo),
+                            MI('$Memo', nStockType)]);
+  //xxxxx
+
+  with FDM.QueryTemp(nStr) do
+  begin
+    if RecordCount > 0 then
+    begin
+      Result := True;
+      Exit;
+    end;
   end;
   nSql := 'select * from %s where T_Truck = ''%s'' ';
   nSql := Format(nSql,[sTable_Truck,nTruckNo]);

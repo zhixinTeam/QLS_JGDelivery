@@ -55,6 +55,8 @@ type
     { Protected declarations }
     FID: string;
     //标识
+    FOldStockNo: string;
+    //旧编号
     procedure InitFormData(const nID: string);
     procedure GetData(Sender: TObject; var nData: string);
     function SetData(Sender: TObject; const nData: string): Boolean;
@@ -76,7 +78,7 @@ implementation
 {$R *.dfm}
 uses
   IniFiles, ULibFun, UMgrControl, UDataModule, UFormInputbox, USysGrid,
-  UFormCtrl, USysDB, USysConst ,USysLoger;
+  UFormCtrl, USysDB, USysConst ,USysLoger, USysBusiness;
 
 type
   TLineStockItem = record
@@ -252,6 +254,11 @@ begin
   begin
     EditStockIDPropertiesChange(EditStockID);
   end;
+
+  if FID <> '' then
+    FOldStockNo := EditStockID.Text
+  else
+    FOldStockNo := '';
 end;
 
 procedure TfFormZTLine.EditStockIDPropertiesChange(Sender: TObject);
@@ -385,6 +392,17 @@ var nIdx: Integer;
     nStr,nEvent: string;
 begin
   if not IsDataValid then Exit;
+
+  if FID <> '' then
+  begin
+    if FOldStockNo <> EditStockID.Text then
+    begin
+      if not VerifyZTlineChange(FID) then
+      begin
+        ShowMsg('当前通道存在排队车辆,无法修改物料', sHint); Exit;
+      end;
+    end;
+  end;
 
   nList := TStringList.Create;
   try

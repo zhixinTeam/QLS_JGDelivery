@@ -2313,20 +2313,111 @@ function TWorkerBusinessCommander.GetInVentSum(var nData: string): Boolean;
 var nStr: string;
     nIdx: Integer;
     nDBWorker: PDBWorker;
+    nFValue, nAXValue: Double;
+    nStockType, nCenterID, nKw: string;
+    nOnLineModel: string;
 begin
   Result := False;
+
+  nStr := 'select D_Value from %s where D_Name=''%s'' ';
+  nStr := Format(nStr, [sTable_SysDict, sFlag_OnLineModel]);
+
+  with gDBConnManager.WorkerQuery(FDBConn, nStr) do
+  if RecordCount > 0 then
+  begin
+    nOnLineModel := Fields[0].AsString;
+  end
+  else
+    nOnLineModel := sFlag_Yes;
+
+  if nOnLineModel <> sFlag_Yes then
+  begin
+    FOut.FData:='10000';
+    Result := True;
+
+    nStr := '离线模式,无需判断负库存';
+    WriteLog(nStr);
+
+    Exit;
+  end;
+
+  nStr := 'select D_Value from %s '+
+          'where D_Value = ''%s'' and D_Name = ''%s'' ';
+  nStr := Format(nStr, [sTable_SysDict, FIn.FData, sFlag_NoKcStock]);
+
+  with gDBConnManager.WorkerQuery(FDBConn, nStr) do
+  if RecordCount > 0 then
+  begin
+    FOut.FData:='10000';
+    Result := True;
+
+    nStr := '生产线[%s]物料编号[%s]无需判断负库存';
+    nStr := Format(nStr, [FIn.FExtParam, FIn.FData]);
+    WriteLog(nStr);
+
+    Exit;
+  end;
+
+  FListA.Clear;
+  FListA.Text := FIn.FExtParam;
+  nCenterID := FListA.Values['CenterID'];
+  if nCenterID = '' then
+  begin
+    WriteLog('生产线为空');
+    Exit;
+  end;
+
+  if FListA.Values['StockType'] = sFlag_Dai then
+  begin
+    nStockType := sFlag_Dai;
+    nKw := 'A04';
+  end
+  else
+  begin
+    nStockType := sFlag_San;
+    nKw := 'A05';
+  end;
+
+  nFValue := 0;
+  nAXValue := 0;
+
+  nStr := 'select Sum(L_Value) as L_TotalValue from %s where L_StockNo = ''%s'' '+
+          'and L_InvCenterId = ''%s'' and L_Type = ''%s'' and (L_OutFact is null) ';
+  nStr := Format(nStr, [sTable_Bill, FIn.FData, nCenterID, nStockType]);
+  with gDBConnManager.WorkerQuery(FDBConn, nStr) do
+  if RecordCount > 0 then
+  begin
+    nFValue := Fields[0].AsFloat;
+
+    nStr := '生产线[%s]物料编号[%s]厂内冻结量:[%s]';
+    nStr := Format(nStr, [nCenterID, FIn.FData + nStockType, FloatToStr(nFValue)]);
+    WriteLog(nStr);
+  end;
+
   nDBWorker := nil;
   try
     //nStr := 'select sum(PostedQty+Received-Deducted+Registered-Picked-ReservPhysical) as Yuliang from %s '+
     nStr := 'select sum(PostedQty+Received-Deducted+Registered-Picked) as Yuliang from %s '+
-            'where itemid=''%s'' and xtInventCenterId=''%s'' and dataareaid=''%s'' ';
-    nStr := Format(nStr, [sTable_AX_InventSum, FIn.FData, FIn.FExtParam, gCompanyAct]);
+            'where itemid=''%s'' and xtInventCenterId=''%s'' and dataareaid=''%s'' ' +
+            'and INVENTLOCATIONID=''%s''';
+    nStr := Format(nStr, [sTable_AX_InventSum, FIn.FData, nCenterID, gCompanyAct, nKw]);
     //xxxxx
-    WriteLog(nStr);
+    WriteLog('查询ERP生产线余量Sql:'+ nStr);
     with gDBConnManager.SQLQuery(nStr, nDBWorker, sFlag_DB_AX) do
     if RecordCount > 0 then
     begin
-      FOut.FData:=FieldByName('Yuliang').AsString;
+
+      nAXValue := Fields[0].AsFloat;
+      nStr := '生产线[%s]物料编号[%s]ERP余量:[%s]';
+      nStr := Format(nStr, [nCenterID, FIn.FData + nStockType, FloatToStr(nAXValue)]);
+
+      nFValue := nAXValue - nFValue;
+      nFValue := Float2PInt(nFValue, cPrecision, False) / cPrecision;
+
+      nStr := '生产线[%s]物料编号[%s]当前可用余量:[%s]';
+      nStr := Format(nStr, [nCenterID, FIn.FData + nStockType, FloatToStr(nFValue)]);
+
+      FOut.FData:= FloatToStr(nFValue);
     end else
     begin
       FOut.FData:='0';
@@ -3030,6 +3121,9 @@ var nStr: string;
 begin
   FListA.Clear;
   Result:=True;
+
+  Exit;
+  
   nDBWorker := nil;
   try
     if FIn.FData='' then
@@ -8914,6 +9008,7 @@ var nVal, nNet, nAKVal: Double;
   nPrePValue:Double;
   nPrePMan:string;
   nPrePTime:TDateTime;
+  nTempData: TPoundStationData;
 begin
   Result := False;
   
@@ -9175,11 +9270,19 @@ begin
           else FPData.FValue := (FPData.FValue*1000 - nVal*1000) / 1000;
         end;
       end;
-      
+
       nStr := SF('P_Order', FID);
       //where
 
       nVal := FMData.FValue - FPData.FValue -FKZValue;
+
+      if FMData.FValue < FPData.FValue then
+      begin
+        nTempData := FPData;
+        FPData := FMData;
+        FMData := nTempData;
+      end;
+
       if FNextStatus = sFlag_TruckBFP then
       begin
         nSQL := MakeSQLByStr([

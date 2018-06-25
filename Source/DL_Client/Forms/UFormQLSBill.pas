@@ -61,7 +61,7 @@ type
       AButtonIndex: Integer);
   protected
     { Protected declarations }
-    FBuDanFlag: string;
+    FBuDanFlag,FWebOrderID: string;
     //补单标记
     procedure LoadFormData;
     //载入数据
@@ -286,7 +286,7 @@ begin
     ShowMsg(nStr, sHint); Exit;
   end;
   InitCenter(gStockNO,gType,cbxCenterID);
-
+  FWebOrderID := Trim(EditID.Text);
   BtnOK.Enabled := True;
   ActiveControl := BtnOK;
 end;
@@ -385,6 +385,11 @@ begin
   end;
   {$ENDIF}
 
+  if not IsEleCardVaid(gType,EditTruck.Text,gStockNo) then
+  begin
+    ShowMsg('车辆未办理电子标签或电子标签未启用！请联系管理员', sHint); Exit;
+  end;
+
   if not IsDealerLadingIDExit(EditJXSTHD.Text) then
   begin
     ShowMsg('经销商提货单号重复', sHint); Exit;
@@ -427,7 +432,7 @@ begin
     with nList do
     begin
       Values['Bills'] := PackerEncodeStr(nList.Text);
-      Values['LID'] := Trim(EditID.Text);
+      Values['LID']   := FWebOrderID;
       Values['ZhiKa'] := gZhiKa;
       Values['Truck'] := EditTruck.Text;
       Values['Lading'] := GetCtrlData(EditLading);
@@ -460,7 +465,7 @@ begin
       {$ENDIF}
       Values['KuWei'] := '';
       Values['LocationID']:= 'A';
-      {nCenterYL:=GetCenterSUM(nStockNo,Values['CenterID']);
+      nCenterYL:=GetCenterSUM(nStockNo,gType,Values['CenterID']);
       if nCenterYL <> '' then
       begin
         if IsNumber(nCenterYL,True) then
@@ -472,7 +477,7 @@ begin
             Exit;
           end;
         end;
-      end; }
+      end;
     end;
     gIDList := SaveBill(PackerEncodeStr(nList.Text));
     //call mit bus
