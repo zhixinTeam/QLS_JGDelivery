@@ -10,7 +10,7 @@ interface
 uses
   Windows, Classes, Controls, DB, SysUtils, UBusinessWorker, UBusinessPacker,
   UBusinessConst, UMgrDBConn, UMgrParam, ZnMD5, ULibFun, UFormCtrl, USysLoger,
-  USysDB, UMITConst;
+  USysDB, UMITConst, StrUtils;
 
 type
   THardwareDBWorker = class(TBusinessWorkerBase)
@@ -419,7 +419,7 @@ end;
 //Parm: 交货单[FIn.FData];通道号[FIn.FExtParam]
 //Desc: 在指定通道上喷码
 function THardwareCommander.PrintCode(var nData: string): Boolean;
-var nStr,nCode: string;
+var nStr,nCode,nHYDan: string;
 begin
   Result := True;
   if not gCodePrinterManager.EnablePrinter then Exit;
@@ -449,6 +449,13 @@ begin
       nCode := Copy(nCode,3,Length(nCode)-2);
       //nCode := gCompanyAct+nCode+Fields[2].AsString+Fields[3].AsString;
       nCode := Copy(gCompanyAct,2,2)+nCode+Fields[3].AsString+Fields[4].AsString+Fields[2].AsString;
+      WriteLog('原始喷码:' + nCode);
+      nCode := Fields[0].AsString;
+      nCode := RightStr(nCode,4);
+      nHYDan := RightStr(Fields[2].AsString,6);
+      nHYDan := Copy(nHYDan,1,3);
+      nCode := FormatDateTime('YYMMDD',Now)+nCode+Fields[3].AsString+Fields[4].AsString+nHYDan;
+      WriteLog('实际喷码:' + nCode);
     end;
   end;
 
