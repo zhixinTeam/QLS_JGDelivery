@@ -84,7 +84,7 @@ type
     FUIData,FInnerData: TLadingBillItem;
     //称重数据
     FLastCardDone: Int64;
-    FLastCard, FCardTmp: string;
+    FLastCard, FCardTmp, FLastReader: string;
     //上次卡号
     FListA: TStrings;
     FSampleIndex: Integer;
@@ -417,7 +417,7 @@ end;
 //Desc: 读取nCard对应的交货单
 procedure TfFrameAutoPoundItem.LoadBillItems(const nCard: string);
 var nRet: Boolean;
-    nStr,nHint: string;
+    nStr,nHint,nPos,nVoice: string;
     nIdx,nInt: Integer;
     nBills: TLadingBillItems;
     nNStatus: string;
@@ -521,17 +521,32 @@ begin
   for nIdx:=Low(nBills) to High(nBills) do
   with nBills[nIdx] do
   begin
-    {$IFDEF GLPURCH}
-    if (FNextStatus=sFlag_TruckNone) and (FCardUsed=sFlag_Provide) then
+    {$IFDEF QlS}
+    if (FStatus=sFlag_TruckNone) then
     begin
-      if SavePurchaseOrders(sFlag_TruckIn, nBills) then
+      if FCardUsed=sFlag_Sale then
       begin
-        ShowMsg('车辆进厂成功', sHint);
-        LoadBillItems(FCardTmp);
-        Exit;
-      end else
+        if SaveLadingBills(nHint, sFlag_TruckIn, nBills) then
+        begin
+          ShowMsg('车辆进厂成功', sHint);
+          LoadBillItems(FCardTmp);
+          Exit;
+        end else
+        begin
+          ShowMsg('车辆进厂失败', sHint);
+        end;
+      end
+      else
       begin
-        ShowMsg('车辆进厂失败', sHint);
+        if SavePurchaseOrders(sFlag_TruckIn, nBills) then
+        begin
+          ShowMsg('车辆进厂成功', sHint);
+          LoadBillItems(FCardTmp);
+          Exit;
+        end else
+        begin
+          ShowMsg('车辆进厂失败', sHint);
+        end;
       end;
     end;
     {$ELSE}
@@ -587,6 +602,28 @@ begin
     Timer_ReadCard.Enabled:=True;
     Exit;
   end;
+
+  {$IFDEF RemoteSnap}
+  if not VerifySnapTruck(FLastReader, nBills[0], nHint, nPos) then
+  begin
+    nVoice := '%s车牌识别失败,请移动车辆或联系管理员';
+    nVoice := Format(nVoice, [nBills[0].FTruck]);
+    PlayVoice(nVoice);
+    RemoteSnapDisPlay(nPos, nHint,sFlag_No);
+    WriteSysLog(nHint);
+    SetUIData(True);
+    Timer_ReadCard.Enabled:=True;
+    Exit;
+  end
+  else
+  begin
+    if nHint <> '' then
+    begin
+      RemoteSnapDisPlay(nPos, nHint,sFlag_Yes);
+      WriteSysLog(nHint);
+    end;
+  end;
+  {$ENDIF}
 
   EditBill.Properties.Items.Clear;
   SetLength(FBillItems, nInt);
@@ -734,7 +771,7 @@ begin
 
   try
     WriteLog('正在读取磁卡号.');
-    nCard := Trim(ReadPoundCard(FPoundTunnel.FID));
+    nCard := Trim(ReadPoundCard(FLastReader, FPoundTunnel.FID));
     if nCard = '' then Exit;
     Timer_ReadCard.Enabled:=False;
     if nCard <> FLastCard then

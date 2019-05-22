@@ -45,6 +45,8 @@ type
     FOKTime  : Int64;
     FExtReader :string;
     FHyprinter :string;
+    FPost    : string;//所在岗位
+    FDept    : string;//所属门岗
   end;
 
   THardwareHelper = class;
@@ -114,6 +116,9 @@ type
     procedure StopRead;
     //启停读取
     function GetPoundCard(const nPound: string): string; overload;
+    function GetReaderInfo(const nReader: string;
+    var nDept: string): string;
+    function GetPoundCardAndReader(const nPound: string; var nReader: string): string;
     function GetPoundCard(const nPound: string; var nReader: string): string; overload;
     procedure SetPoundCardExt(const nPound,nExtCard: string);
     //磅站卡号
@@ -197,6 +202,33 @@ end;
 
 //Desc: 获取nPound当前卡号
 function THardwareHelper.GetPoundCard(const nPound: string; var nReader: string): string;
+var nIdx: Integer;
+begin
+  FSyncLock.Enter;
+  try
+    Result := '';
+
+    for nIdx:=Low(FItems) to High(FItems) do
+    if CompareText(nPound, FItems[nIdx].FPound) = 0 then
+    begin
+      if GetTickCount - FItems[nIdx].FLast <= FItems[nIdx].FKeep * 1000 then
+        Result := FItems[nIdx].FCard;
+      //xxxxx
+      FItems[nIdx].FCard := '';
+      if Result <> '' then
+      begin
+        nReader := FItems[nIdx].FID;
+        Break;
+      end;
+      //loop get card
+    end;
+  finally
+    FSyncLock.Leave;
+  end;
+end;
+
+//Desc: 获取nPound当前卡号
+function THardwareHelper.GetPoundCardAndReader(const nPound: string; var nReader: string): string;
 var nIdx: Integer;
 begin
   FSyncLock.Enter;
@@ -448,6 +480,16 @@ begin
         else FKeep := 3;
       end;
 
+      nTP := NodeByName('Post');
+      if Assigned(nTP) then
+           FPost := nTP.ValueAsString
+      else FPost := '';
+
+      nTP := NodeByName('Dept');
+      if Assigned(nTP) then
+           FDept := nTP.ValueAsString
+      else FDept := '';
+
       Inc(nInt);
     end;
   finally
@@ -693,6 +735,32 @@ begin
     SetReaderCard(nR, nStr);
   finally
     FOwner.FSyncLock.Leave;
+  end;
+end;
+
+//Desc: 获取nReader所属岗位、部门
+function THardwareHelper.GetReaderInfo(const nReader: string;
+    var nDept: string): string;
+var nIdx: Integer;
+begin
+  FSyncLock.Enter;
+  try
+    Result := '';
+
+    for nIdx:=Low(FItems) to High(FItems) do
+    if CompareText(nReader, FItems[nIdx].FID) = 0 then
+    begin
+      Result := FItems[nIdx].FPost;
+      //xxxxx
+
+      if Result <> '' then
+      begin
+        nDept := FItems[nIdx].FDept;
+        Break;
+      end;
+    end;
+  finally
+    FSyncLock.Leave;
   end;
 end;
 

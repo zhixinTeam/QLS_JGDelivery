@@ -100,7 +100,7 @@ ResourceString
   sFlag_ManualB       = 'B';                         //皮重超出范围
   sFlag_ManualC       = 'C';                         //净重超出误差范围
   sFlag_ManualD       = 'D';                         //出厂编号变更通知  
-  
+  sFlag_ManualE       = 'E';
   sFlag_TiHuo         = 'T';                         //自提
   sFlag_SongH         = 'S';                         //送货
   sFlag_XieH          = 'X';                         //运卸
@@ -264,11 +264,15 @@ ResourceString
   sFlag_Sgzl          = 'HuYanSgzl';                 //石膏种类
   sFlag_BrickItem     = 'BrickItem';                 //外销砖块种类
   sFlag_NoKcStock     = 'NoKcStock';                 //无库存物料
+  sFlag_TruckInNeedManu = 'TruckInNeedManu';         //车牌识别需要人工干预
+  sFlag_SnapInfoPost  = 'SnapInfoPost';              //车牌识别消息推送岗位
 
   sFlag_Departments   = 'Departments';               //部门列表
 //  sFlag_DepDaTing     = '大厅';                      //服务大厅
 //  sFlag_DepJianZhuang = '监装';                      //监装
-//  sFlag_DepBangFang   = '磅房';                      //磅房  
+//  sFlag_DepBangFang   = '磅房';                      //磅房
+
+  sFlag_Solution_YN   = 'Y=通过;N=禁止';
 
   {*数据表*}
   sTable_Group        = 'Sys_Group';                 //用户组
@@ -354,6 +358,7 @@ ResourceString
   sTable_BindInfo     = 'W_BindInfo';                //用户绑定（微信）
   sTable_CustomerInfo = 'W_CustomerInfo';            //客户信息（微信）
   sTable_WebOrderMatch   = 'S_WebOrderMatch';        //商城订单映射
+  sTable_SnapTruck    = 'Sys_SnapTruck';             //车辆抓拍记录
 
   sTable_InventDim       = 'Sys_InventDim';          //维度信息
   sTable_InventCenter    = 'Sys_InventCenter';       //生产线基础表
@@ -2261,6 +2266,17 @@ ResourceString
    *.$ID:信息标识
   -----------------------------------------------------------------------------}
 
+  sSQL_SnapTruck = 'Create Table $Table(R_ID $Inc, S_ID varChar(20), ' +
+       'S_Truck varChar(20), S_Date DateTime, S_PicName varChar(80))';
+  {-----------------------------------------------------------------------------
+   车牌识别:
+   *.R_ID:记录编号
+   *.S_ID: 抓拍岗位
+   *.S_Truck:抓拍车牌号
+   *.S_Date: 抓拍时间
+   *.S_PicName: 抓拍图片路径
+  -----------------------------------------------------------------------------}
+
 function CardStatusToStr(const nStatus: string): string;
 //磁卡状态
 function TruckStatusToStr(const nStatus: string): string;
@@ -2427,7 +2443,7 @@ begin
   AddSysTableItem(sTable_AxPlanInfo, sSQL_NewAxPlanInfo,'');
   AddSysTableItem(sTable_AxMsgList, sSQL_NewAxMsgList,'');
   AddSysTableItem(sTable_YSLines, sSQL_NewYSLines, '');
-
+  AddSysTableItem(sTable_SnapTruck,sSQL_SnapTruck, '');
 end;
 
 //Desc: 清理系统表

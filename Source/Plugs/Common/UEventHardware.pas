@@ -37,7 +37,7 @@ uses
   UMgrQueue, UMgrLEDCard, UMgrHardHelper, UMgrRemotePrint, U02NReader,
   UMgrERelay, {$IFDEF QHSN} UMultiJS_Reply, {$ELSE}UMultiJS,{$ENDIF}
   UMgrRemoteVoice, UMgrCodePrinter, UMgrLEDDisp, UMgrRFID102,
-  UMgrVoiceNet;
+  UMgrVoiceNet, UMgrRemoteSnap;
 
 class function THardwareWorker.ModuleInfo: TPlugModuleInfo;
 begin
@@ -119,6 +119,15 @@ begin
       gProberManager := TProberManager.Create;
       gProberManager.LoadConfig(nCfg + 'TruckProber.xml');
     end;
+
+    {$IFDEF RemoteSnap}
+    nStr := '海康威视远程抓拍';
+    if FileExists(nCfg + 'RemoteSnap.xml') then
+    begin
+      //gHKSnapHelper := THKSnapHelper.Create;
+      gHKSnapHelper.LoadConfig(nCfg + 'RemoteSnap.xml');
+    end;
+    {$ENDIF}
   except
     on E:Exception do
     begin
@@ -200,6 +209,11 @@ begin
   //small led
   gProberManager.StartProber;
   //TruckProbe
+
+  {$IFDEF RemoteSnap}
+  gHKSnapHelper.StartSnap;
+  //remote snap
+  {$ENDIF}
 end;
 
 procedure THardwareWorker.AfterStopServer;
@@ -244,6 +258,10 @@ begin
   //TruckProbe
   gTruckQueueManager.StopQueue;
   //queue
+  {$IFDEF RemoteSnap}
+  gHKSnapHelper.StopSnap;
+  //remote snap
+  {$ENDIF}
 end;
 
 end.

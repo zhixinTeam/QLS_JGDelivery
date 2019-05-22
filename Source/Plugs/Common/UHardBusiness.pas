@@ -11,7 +11,8 @@ uses
   Windows, Classes, Controls, SysUtils, UMgrDBConn, UMgrParam, DB,
   UBusinessWorker, UBusinessConst, UBusinessPacker, UMgrQueue,
   UMgrHardHelper, U02NReader, UMgrERelay, UMgrRemotePrint,
-  UMultiJS_Reply, UMgrLEDDisp, UMgrRFID102, UMITConst, Graphics;
+  UMultiJS_Reply, UMgrLEDDisp, UMgrRFID102, UMITConst, Graphics,
+  UMgrremoteSnap, UMgrVoiceNet;
 
 procedure WhenReaderCardArrived(const nReader: THHReaderItem);
 procedure WhenHYReaderCardArrived(const nReader: PHYReaderItem);
@@ -42,7 +43,8 @@ function SaveDBImage(const nDS: TDataSet; const nFieldName: string;
 
 function IsBrickProduct(const nlid:string):Boolean;
 procedure WriteHardHelperLog(const nEvent: string; nPost: string = '');
-
+function VerifySnapTruck(const nTruck,nBill,nPos,nDept: string;var nResult: string): Boolean;
+//车牌识别
 implementation
 
 uses
@@ -51,6 +53,11 @@ uses
 const
   sPost_In   = 'in';
   sPost_Out  = 'out';
+
+  sPost_SIn   = 'Sin';
+  sPost_SOut  = 'Sout';
+  sPost_PIn   = 'Pin';
+  sPost_POut  = 'Pout';
 
 function SaveDBImage(const nDS: TDataSet; const nFieldName: string;
       const nImage: string): Boolean;
@@ -516,11 +523,39 @@ begin
     Result := nOut.FData;
 end;
 
+//Date: 2017-10-16
+//Parm: 内容;岗位;业务成功
+//Desc: 播放门岗语音
+procedure MakeGateSound(const nText,nPost: string; const nSucc: Boolean);
+var nStr: string;
+    nInt: Integer;
+begin
+  try
+    if nSucc then
+         nInt := 2
+    else nInt := 3;
+
+    gHKSnapHelper.Display(nPost, nText, nInt);
+    //小屏显示
+
+    gNetVoiceHelper.PlayVoice(nText, nPost);
+    //播发语音
+    WriteHardHelperLog(nText+'岗位:'+nPost);
+  except
+    on nErr: Exception do
+    begin
+      nStr := '播放[ %s ]语音失败,描述: %s';
+      nStr := Format(nStr, [nPost, nErr.Message]);
+      WriteHardHelperLog(nStr);
+    end;
+  end;
+end;
+
 //Date: 2012-4-22
 //Parm: 卡号
 //Desc: 对nCard放行进厂
-procedure MakeTruckIn(const nCard,nReader: string);
-var nStr,nTruck,nCardType: string;
+procedure MakeTruckIn(const nCard,nReader,nPost,nDept: string);
+var nStr,nTruck,nCardType,nSnapStr,nPos: string;
     nIdx,nInt: Integer;
     nPLine: PLineItem;
     nPTruck: PTruckItem;
@@ -538,7 +573,12 @@ begin
 
   nCardType := '';
   if not GetCardUsed(nCard, nCardType) then Exit;
-  
+
+  if nPost = '' then
+    nPos := sPost_SIn
+  else
+    nPos := nPost;
+
   if nCardType = sFlag_Other then   //临时卡进厂
   begin
     nDB := nil;
@@ -561,10 +601,25 @@ begin
           nStr := Format(nStr, [nCard]);
 
           WriteHardHelperLog(nStr, sPost_In);
+          {$IFDEF RemoteSnap}
+          nStr := '读取磁卡信息失败';
+          MakeGateSound(nStr, nPos, False);
+          {$ENDIF}
           Exit;
         end;
         if FieldByName('O_InTime').IsNull then
         begin
+          {$IFDEF RemoteSnap}
+          if not VerifySnapTruck(FieldByName('I_Truck').AsString,'',
+                                 nPos,nDept,nSnapStr) then
+          begin
+            MakeGateSound(nSnapStr, nPos, False);
+            Exit;
+          end;
+          nStr := nSnapStr + ',请进厂';
+          MakeGateSound(nStr, nPos, True);
+          {$ENDIF}
+
           gHYReaderManager.OpenDoor(nReader);//抬杆
           nStr := '临时卡[ %s ]进厂.';
           nStr := Format(nStr, [nCard]);
@@ -618,8 +673,23 @@ begin
           nStr := Format(nStr, [nCard]);
 
           WriteHardHelperLog(nStr, sPost_In);
+          {$IFDEF RemoteSnap}
+          nStr := '读取磁卡信息失败';
+          MakeGateSound(nStr, nPos, False);
+          {$ENDIF}
           Exit;
         end;
+        {$IFDEF RemoteSnap}
+        if not VerifySnapTruck(FieldByName('I_Truck').AsString,'',
+                               nPos,nDept,nSnapStr) then
+        begin
+          MakeGateSound(nSnapStr, nPos, False);
+          Exit;
+        end;
+        nStr := nSnapStr + ',请进厂';
+        MakeGateSound(nStr, nPos, True);
+        {$ENDIF}
+
         nTruck:=FieldByName('I_truck').AsString;
         gHYReaderManager.OpenDoor(nReader);//抬杆
         nStr := '%s商砼卡[ %s ]进厂.';
@@ -656,6 +726,10 @@ begin
     nStr := Format(nStr, [nCard]);
 
     WriteHardHelperLog(nStr, sPost_In);
+    {$IFDEF RemoteSnap}
+    nStr := '读取磁卡信息失败';
+    MakeGateSound(nStr, nPos, False);
+    {$ENDIF}
     Exit;
   end;
   
@@ -665,6 +739,10 @@ begin
     nStr := Format(nStr, [nCard]);
 
     WriteHardHelperLog(nStr, sPost_In);
+    {$IFDEF RemoteSnap}
+    nStr := '请先到开票室办理业务';
+    MakeGateSound(nStr, nPos, False);
+    {$ENDIF}
     Exit;
   end;
 
@@ -685,6 +763,11 @@ begin
     nStr := Format(nStr, [FTruck, TruckStatusToStr(FNextStatus)]);
 
     WriteHardHelperLog(nStr, sPost_In);
+    {$IFDEF RemoteSnap}
+    nStr := '车辆[ %s ]不能进厂,应该去[ %s ]';
+    nStr := Format(nStr, [FTruck, TruckStatusToStr(FNextStatus)]);
+    MakeGateSound(nStr, nPos, False);
+    {$ENDIF}
     Exit;
   end;
 
@@ -713,6 +796,17 @@ begin
 
   if nCardType = sFlag_Provide then
   begin
+    {$IFDEF RemoteSnap}
+    if (not (nTrucks[0].FNeiDao=sFlag_Yes)) then//内倒不判断
+    if (nTrucks[0].FStatus = sFlag_TruckNone) then//已进厂不判断
+    if not VerifySnapTruck(nTrucks[0].FTruck,nTrucks[0].FID,nPos,nDept,nSnapStr) then
+    begin
+      MakeGateSound(nSnapStr, nPos, False);
+      Exit;
+    end;
+    nStr := nSnapStr + ',请进厂';
+    MakeGateSound(nStr, nPos, True);
+    {$ENDIF}
     if not SaveLadingOrders(sFlag_TruckIn, nTrucks) then
     begin
       nStr := '车辆[ %s ]进厂放行失败.';
@@ -779,6 +873,18 @@ begin
       SyncLock.Leave;
     end;  
   end;
+  {$ENDIF}
+
+  {$IFDEF RemoteSnap}
+  if (not (nTrucks[0].FNeiDao=sFlag_Yes)) then//内倒不判断
+  if (nTrucks[0].FStatus = sFlag_TruckNone) then//已进厂不判断
+  if not VerifySnapTruck(nTrucks[0].FTruck,nTrucks[0].FID,nPos,nDept,nSnapStr) then
+  begin
+    MakeGateSound(nSnapStr, nPos, False);
+    Exit;
+  end;
+  nStr := nSnapStr + ',请进厂';
+  MakeGateSound(nStr, nPos, True);
   {$ENDIF}
 
   if not SaveLadingBills(sFlag_TruckIn, nTrucks) then
@@ -1239,7 +1345,7 @@ begin
   try
     if nReader.FType = rtIn then
     begin
-      MakeTruckIn(nStr, nReader.FID);
+      MakeTruckIn(nStr, nReader.FID, nReader.FPost, nReader.FDept);
     end else
     if nReader.FType = rtOut then
     begin
@@ -1301,6 +1407,7 @@ function IsTruckInQueue(const nTruck,nTunnel: string; const nQueued: Boolean;
  const nStockType: string = ''): Boolean;
 var i,nIdx,nInt: Integer;
     nLineItem: PLineItem;
+    nStr: string;
 begin
   with gTruckQueueManager do
   try
@@ -1359,6 +1466,7 @@ begin
     nPTruck := nPLine.FTrucks[nIdx];
     nPTruck.FStockName := nPLine.FName;
     //同步物料名
+
     Result := True;
   finally
     SyncLock.Leave;
@@ -2072,7 +2180,7 @@ begin
   begin
     if nHost.FFun = rfIn then
     begin
-      MakeTruckIn(nCard, '');
+      MakeTruckIn(nCard, '', '', '');
     end else
     if nHost.FFun = rfOut then
     begin
@@ -2177,6 +2285,38 @@ begin
 
     nStr := PackerEncodeStr(nList.Text);
     CallHardwareCommand(cBC_SaveCountData, nStr, '', @nOut)
+  finally
+    nList.Free;
+  end;
+end;
+
+function VerifySnapTruck(const nTruck,nBill,nPos,nDept: string; var nResult: string): Boolean;
+var nList: TStrings;
+    nOut: TWorkerBusinessCommand;
+    nID,nDefDept: string;
+begin
+  {$IFDEF QHSN}
+  nDefDept := 'cmmg';
+  {$ELSE}
+  nDefDept := '门岗';
+  {$ENDIF}
+  if nBill = '' then
+    nID := nTruck + FormatDateTime('YYMMDD',Now)
+  else
+    nID := nBill;
+  nList := nil;
+  try
+    nList := TStringList.Create;
+    nList.Values['Truck'] := nTruck;
+    nList.Values['Bill'] := nID;
+    nList.Values['Pos'] := nPos;
+    if nDept = '' then
+      nList.Values['Dept'] := nDefDept
+    else
+      nList.Values['Dept'] := nDept;
+
+    Result := CallBusinessCommand(cBC_VerifySnapTruck, nList.Text, '', @nOut);
+    nResult := nOut.FData;
   finally
     nList.Free;
   end;

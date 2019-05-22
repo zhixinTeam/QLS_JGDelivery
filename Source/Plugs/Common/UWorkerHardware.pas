@@ -72,6 +72,10 @@ type
     //车辆检测控制器业务
     function OpenPoundDoor(var nData: string): Boolean;
     //道闸抬杆
+    function PoundReaderInfo(var nData: string): Boolean;
+    //读取磅站读卡器岗位、部门
+    function RemoteSnap_DisPlay(var nData: string): Boolean;
+    //抓拍小屏显示
   public
     constructor Create; override;
     destructor destroy; override;
@@ -85,7 +89,7 @@ implementation
 
 uses
   UMgrHardHelper, UMgrCodePrinter, UMgrQueue, UMultiJS_Reply, UTaskMonitor,
-  UMgrTruckProbe, UMgrRFID102;
+  UMgrTruckProbe, UMgrRFID102, UMgrRemoteSnap;
 
 //Date: 2012-3-13
 //Parm: 如参数护具
@@ -246,6 +250,9 @@ begin
      cBC_IsTunnelOK           : Result := TruckProbe_IsTunnelOK(nData);
      cBC_TunnelOC             : Result := TruckProbe_TunnelOC(nData);
      cBC_OPenPoundDoor        : Result := OpenPoundDoor(nData);
+
+     cBC_GetPoundReaderInfo   : Result := PoundReaderInfo(nData);
+     cBC_RemoteSnapDisPlay    : Result := RemoteSnap_DisPlay(nData);
     else
       begin
         Result := False;
@@ -306,9 +313,10 @@ var nStr: string;
     nReader: string;
 begin
   Result := True;
-  FOut.FData := gHardwareHelper.GetPoundCard(FIn.FData, nReader);
+  FOut.FData := gHardwareHelper.GetPoundCardAndReader(FIn.FData, nReader);
   if FOut.FData = '' then Exit;
 
+  FOut.FExtParam := nReader;
   nStr := 'Select C_Card From $TB Where C_Card=''$CD'' or ' +
           'C_Card2=''$CD'' or C_Card3=''$CD''';
   nStr := MacroValue(nStr, [MI('$TB', sTable_Card), MI('$CD', FOut.FData)]);
@@ -681,6 +689,42 @@ begin
   except
     FOut.FData:= '道闸抬杆Error';
   end;
+end;
+
+//Date: 2018-08-03
+//Parm: 读卡器ID[FIn.FData];
+//Desc: 获取指定磅站读卡器上的岗位、部门
+function THardwareCommander.PoundReaderInfo(var nData: string): Boolean;
+var nStr, nPoundID: string;
+    nIdx: Integer;
+begin
+  Result := True;
+
+  FOut.FData := gHardwareHelper.GetReaderInfo(FIn.FData, FOut.FExtParam);
+end;
+
+//Date: 2018-08-14
+//Parm: 岗位[FIn.FData] 发送内容[FIn.FExt]
+//Desc: 向指定通道的显示屏发送内容
+function THardwareCommander.RemoteSnap_DisPlay(var nData: string): Boolean;
+var nInt: Integer;
+begin
+  Result := True;
+  if not Assigned(gHKSnapHelper) then Exit;
+
+  FListA.Clear;
+  FListA.Text := PackerDecodeStr(FIn.FExtParam);
+
+  if FListA.Values['succ'] = sFlag_No then
+         nInt := 3
+  else nInt := 2;
+
+  gHKSnapHelper.Display(FIn.FData,FListA.Values['text'], nInt);
+
+  nData := Format('RemoteSnapDisPlay -> %s:%s:%s', [FIn.FData,
+                                                    FListA.Values['text'],
+                                                    FListA.Values['succ']]);
+  WriteLog(nData);
 end;
 
 initialization

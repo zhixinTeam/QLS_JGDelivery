@@ -81,10 +81,14 @@ const
   cBC_SaveCountData           = $0064;   //保存计数结果
   cBC_RemoteExecSQL           = $0065;
 
+  cBC_RemoteSnapDisPlay       = $0066;   //抓拍小屏显示
+  cBC_GetPoundReaderInfo      = $0067;   //获取磅站读卡器岗位、部门
+
   cBC_IsTunnelOK              = $0075;   //查询车检状态
   cBC_TunnelOC                = $0076;   //红绿灯开关
   cBC_OPenPoundDoor           = $0077;   //道闸抬杆
-
+  cBC_VerifySnapTruck         = $0079;   //车牌比对
+  
   cBC_SyncCustomer            = $0080;   //远程同步客户
   cBC_SyncSaleMan             = $0081;   //远程同步业务员
   cBC_SyncStockBill           = $0082;   //同步单据到远程

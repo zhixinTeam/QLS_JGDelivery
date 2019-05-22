@@ -152,7 +152,7 @@ function GetTruckPoundItem(const nTruck: string;
 function SaveTruckPoundItem(const nTunnel: PPTTunnelItem;
  const nData: TLadingBillItems): Boolean;
 //保存车辆过磅记录
-function ReadPoundCard(const nTunnel: string): string;
+function ReadPoundCard(var nReader: string;const nTunnel: string): string;
 //读取指定磅站读头上的卡号
 function OpenDoor(const nCardNo,nPos: string): string;  //nPos: 0:入口道闸 1：出口道闸
 //开启道闸
@@ -373,6 +373,11 @@ function IsBrick(const nStockno:string):Boolean;
 
 function VerifyZTlineChange(const nLineID: string): Boolean;
 //校验装车线nLineID水泥品种变更时如果存在排队车辆则无法修改
+function VeriFySnapTruck(const nReader: string; nBill: TLadingBillItem;
+                         var nMsg, nPos: string): Boolean;
+function ReadPoundReaderInfo(const nReader: string; var nDept: string): string;
+//读取nReader岗位、部门
+procedure RemoteSnapDisPlay(const nPost, nText, nSucc: string);
 
 implementation
 
@@ -1259,11 +1264,15 @@ end;
 //Date: 2014-10-02
 //Parm: 通道号
 //Desc: 读取nTunnel读头上的卡号
-function ReadPoundCard(const nTunnel: string): string;
+function ReadPoundCard(var nReader: string;const nTunnel: string): string;
 var nOut: TWorkerBusinessCommand;
 begin
+  nReader:= '';
   if CallBusinessHardware(cBC_GetPoundCard, nTunnel, '', @nOut) then
-       Result := nOut.FData
+  begin
+    Result := Trim(nOut.FData);
+    nReader:= Trim(nOut.FExtParam);
+  end
   else Result := '';
 end;
 
@@ -3820,6 +3829,183 @@ begin
       Result := False;
       Exit;
     end;
+  end;
+end;
+
+function VerifySnapTruck(const nReader: string; nBill: TLadingBillItem;
+                         var nMsg, nPos: string): Boolean;
+var nStr, nDept: string;
+    nNeedManu, nUpdate: Boolean;
+    nSnapTruck, nTruck, nEvent, nPicName: string;
+begin
+  Result := False;
+  nPos := '';
+  nNeedManu := False;
+  nSnapTruck := '';
+  nDept := '';
+  nTruck := nBill.Ftruck;
+
+  nPos := ReadPoundReaderInfo(nReader,nDept);
+
+  if nPos = '' then
+  begin
+    Result := True;
+    nMsg := '读卡器[ %s ]绑定岗位为空,无法进行抓拍识别.';
+    nMsg := Format(nMsg, [nReader]);
+    Exit;
+  end;
+
+  nStr := 'Select D_Value From %s Where D_Name=''%s'' and D_Memo=''%s''';
+  nStr := Format(nStr, [sTable_SysDict, sFlag_TruckInNeedManu,nPos]);
+  //xxxxx
+
+  with FDM.QueryTemp(nStr) do
+  begin
+    if RecordCount > 0 then
+    begin
+      nNeedManu := FieldByName('D_Value').AsString = sFlag_Yes;
+
+      if nNeedManu then
+      begin
+        nMsg := '读卡器[ %s ]绑定岗位[ %s ]干预规则:人工干预已启用.';
+        nMsg := Format(nMsg, [nReader, nPos]);
+      end
+      else
+      begin
+        nMsg := '读卡器[ %s ]绑定岗位[ %s ]干预规则:人工干预已关闭.';
+        nMsg := Format(nMsg, [nReader, nPos]);
+        Result := True;
+        Exit;
+      end;
+    end
+    else
+    begin
+      Result := True;
+      nMsg := '读卡器[ %s ]绑定岗位[ %s ]未配置干预规则,无法进行抓拍识别.';
+      nMsg := Format(nMsg, [nReader, nPos]);
+      Exit;
+    end;
+  end;
+
+  nStr := 'Select * From %s Where S_ID=''%s'' order by R_ID desc ';
+  nStr := Format(nStr, [sTable_SnapTruck, nPos]);
+  //xxxxx
+
+  with FDM.QueryTemp(nStr) do
+  begin
+    if RecordCount < 1 then
+    begin
+      if not nNeedManu then
+        Result := True;
+      Exit;
+    end;
+
+    nPicName := '';
+
+    First;
+
+    while not Eof do
+    begin
+      nSnapTruck := FieldByName('S_Truck').AsString;
+      if nPicName = '' then//默认取最新一次抓拍
+        nPicName := FieldByName('S_PicName').AsString;
+      if Pos(nTruck,nSnapTruck) > 0 then
+      begin
+        Result := True;
+        nPicName := FieldByName('S_PicName').AsString;
+        //取得匹配成功的图片路径
+        nMsg := '车辆[ %s ]车牌识别成功,抓拍车牌号:[ %s ]';
+        nMsg := Format(nMsg, [nTruck,nSnapTruck]);
+        Exit;
+      end;
+      //车牌识别成功
+      Next;
+    end;
+  end;
+
+  nStr := 'Select * From %s Where E_ID=''%s''';
+  nStr := Format(nStr, [sTable_ManualEvent, nBill.FID+sFlag_ManualE]);
+
+  with FDM.QueryTemp(nStr) do
+  begin
+    if RecordCount > 0 then
+    begin
+      if FieldByName('E_Result').AsString = 'N' then
+      begin
+        nMsg := '车辆[ %s ]车牌识别失败,抓拍车牌号:[ %s ],管理员禁止';
+        nMsg := Format(nMsg, [nTruck,nSnapTruck]);
+        Exit;
+      end;
+      if FieldByName('E_Result').AsString = 'Y' then
+      begin
+        Result := True;
+        nMsg := '车辆[ %s ]车牌识别失败,抓拍车牌号:[ %s ],管理员允许';
+        nMsg := Format(nMsg, [nTruck,nSnapTruck]);
+        Exit;
+      end;
+      nUpdate := True;
+    end
+    else
+    begin
+      nMsg := '车辆[ %s ]车牌识别失败,抓拍车牌号:[ %s ]';
+      nMsg := Format(nMsg, [nTruck,nSnapTruck]);
+      nUpdate := False;
+      if not nNeedManu then
+      begin
+        Result := True;
+        Exit;
+      end;
+    end;
+  end;
+
+  nEvent := '车辆[ %s ]车牌识别失败,抓拍车牌号:[ %s ]';
+  nEvent := Format(nEvent, [nTruck,nSnapTruck]);
+
+  nStr := SF('E_ID', nBill.FID+sFlag_ManualE);
+  nStr := MakeSQLByStr([
+          SF('E_ID', nBill.FID+sFlag_ManualE),
+          SF('E_Key', nPicName),
+          SF('E_From', nPos),
+          SF('E_Result', 'Null', sfVal),
+
+          SF('E_Event', nEvent),
+          SF('E_Solution', sFlag_Solution_YN),
+          SF('E_Departmen', nDept),
+          SF('E_Date', sField_SQLServer_Now, sfVal)
+          ], sTable_ManualEvent, nStr, (not nUpdate));
+  //xxxxx
+  FDM.ExecuteSQL(nStr);
+end;
+
+//Date: 2018-08-03
+//Parm: 读卡器ID
+//Desc: 读取nReader岗位、部门
+function ReadPoundReaderInfo(const nReader: string; var nDept: string): string;
+var nOut: TWorkerBusinessCommand;
+begin
+  Result := '';
+  nDept:= '';
+  //卡号
+
+  if CallBusinessHardware(cBC_GetPoundReaderInfo, nReader, '', @nOut)  then
+  begin
+    Result := Trim(nOut.FData);
+    nDept:= Trim(nOut.FExtParam);
+  end;
+end;
+
+procedure RemoteSnapDisPlay(const nPost, nText, nSucc: string);
+var nOut: TWorkerBusinessCommand;
+    nList: TStrings;
+begin
+  nList := TStringList.Create;
+  try
+    nList.Values['text'] := nText;
+    nList.Values['succ'] := nSucc;
+
+    CallBusinessHardware(cBC_RemoteSnapDisPlay, nPost, PackerEncodeStr(nList.Text), @nOut);
+  finally
+    nList.Free;
   end;
 end;
 
